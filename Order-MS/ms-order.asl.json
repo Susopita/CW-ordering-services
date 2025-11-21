@@ -6,7 +6,8 @@
             "Type": "Choice",
             "Choices": [
                 {
-                    "Next": "DynamoDB UpdateItem"
+                    "Next": "DynamoDB UpdateItem",
+                    "Condition": "{% $['detail-type'] = 'ProductoAgregado' %}"
                 }
             ]
         },
@@ -18,12 +19,37 @@
                 "Key": {
                     "user_id": {
                         "S": "{% 'USER#' & $userId %}"
+                    },
+                    "entity_type": {
+                        "S": "CART"
                     }
                 },
-                "UpdateExpression": "SET carrito.#id = :prod",
+                "UpdateExpression": "SET items.#id = :attrs, updatedAt = :fecha, expiracion = :ttl",
+                "ExpressionAttributeNames": {
+                    "#id": "{% $itemId %}"
+                },
                 "ExpressionAttributeValues": {
-                    ":myValueRef": {
-                        "S": "MyValue"
+                    ":attrs": {
+                        "M": {
+                            "nombre": {
+                                "S": "{% $producto.nombre %}"
+                            },
+                            "precio": {
+                                "N": "{% $string($producto.precio) %}"
+                            },
+                            "cantidad": {
+                                "N": "{% $string($producto.cantidad) %}"
+                            },
+                            "opciones": {
+                                "S": "{% $join($producto.opciones, ', ') %}"
+                            }
+                        }
+                    },
+                    ":fecha": {
+                        "S": "{% $now() %}"
+                    },
+                    ":ttl": {
+                        "N": "{% $string($floor(($millis() + 86400000) / 1000)) %}"
                     }
                 }
             },
