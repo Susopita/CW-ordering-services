@@ -14,27 +14,56 @@
                     "Condition": "{% $['detail-type'] = 'LoginManagerAdmin' %}"
                 },
                 {
-                    "Next": "SignUp",
+                    "Next": "Registrar Cliente",
                     "Condition": "{% $['detail-type'] = 'RegisterCliente' %}"
                 },
                 {
                     "Condition": "{% $['detail-type'] = 'RegisterManager' %}",
-                    "Next": "SignUp (1)"
+                    "Next": "Registrar Managers"
                 },
                 {
+                    "Next": "Refresh TTL de conexion",
                     "Condition": "{% $['detail-type'] = 'Ping' %}",
-                    "Comment": "Esta ruta sirve para hacer Pong y que reinicie el ttl de la conexion",
-                    "End": true
+                    "Comment": "Esta ruta sirve para hacer Pong y que reinicie el ttl de la conexion"
                 }
             ]
         },
-        "SignUp (1)": {
+        "Registrar Managers": {
             "Type": "Task",
             "Arguments": {
-                "ClientId": "MyData",
-                "Username": "MyData"
+                "ClientId": "{% Con serverless %}",
+                "Username": "{% $client.gmail %}",
+                "Password": "{% $client.password %}"
             },
             "Resource": "arn:aws:states:::aws-sdk:cognitoidentityprovider:signUp",
+            "Next": "Agregar a grupo de Managers"
+        },
+        "Agregar a grupo de Managers": {
+            "Type": "Task",
+            "Arguments": {
+                "GroupName": "Managers",
+                "UserPoolId": "{% con serverless %}",
+                "Username": "{% $client.gmail %}"
+            },
+            "Resource": "arn:aws:states:::aws-sdk:cognitoidentityprovider:adminAddUserToGroup",
+            "Next": "Notificar: ManagerRegistrado"
+        },
+        "Notificar: ManagerRegistrado": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::events:putEvents.waitForTaskToken",
+            "Arguments": {
+                "Entries": [
+                    {
+                        "Detail": {
+                            "Message": "Hello from Step Functions!",
+                            "TaskToken": "{% $states.context.Task.Token %}"
+                        },
+                        "DetailType": "MyDetailType",
+                        "EventBusName": "MyEventBusName",
+                        "Source": "MySource"
+                    }
+                ]
+            },
             "End": true
         },
         "Login Cliente": {
@@ -177,13 +206,83 @@
             },
             "End": true
         },
-        "SignUp": {
+        "Registrar Cliente": {
             "Type": "Task",
             "Arguments": {
-                "ClientId": "MyData",
-                "Username": "MyData"
+                "ClientId": "{% Con serverless %}",
+                "Username": "{% $client.gmail %}",
+                "Password": "{% $client.password %}"
             },
             "Resource": "arn:aws:states:::aws-sdk:cognitoidentityprovider:signUp",
+            "Next": "Agregar a Grupo de Clientes"
+        },
+        "Agregar a Grupo de Clientes": {
+            "Type": "Task",
+            "Arguments": {
+                "GroupName": "Clientes",
+                "UserPoolId": "{% con serverless %}",
+                "Username": "{% $client.gmail %}"
+            },
+            "Resource": "arn:aws:states:::aws-sdk:cognitoidentityprovider:adminAddUserToGroup",
+            "Next": "Notificar: ClienteRegistrado"
+        },
+        "Notificar: ClienteRegistrado": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::events:putEvents.waitForTaskToken",
+            "Arguments": {
+                "Entries": [
+                    {
+                        "Detail": {
+                            "Message": "Hello from Step Functions!",
+                            "TaskToken": "{% $states.context.Task.Token %}"
+                        },
+                        "DetailType": "MyDetailType",
+                        "EventBusName": "MyEventBusName",
+                        "Source": "MySource"
+                    }
+                ]
+            },
+            "End": true
+        },
+        "Refresh TTL de conexion": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::dynamodb:updateItem",
+            "Arguments": {
+                "TableName": "DB_Conexiones",
+                "Key": {
+                    "connection_id": {
+                        "S": "$states.input.connection_id"
+                    }
+                },
+                "UpdateExpression": "SET #t = :newTTL",
+                "ExpressionAttributeNames": {
+                    "#t": "ttl"
+                },
+                "ExpressionAttributeValues": {
+                    ":newTTL": {
+                        "N": "$string($floor(($toMillis($now()) + 7200000) / 1000))"
+                    }
+                },
+                "ConditionExpression": "attribute_exists(connection_id)"
+            },
+            "Next": "Pong!"
+        },
+        "Pong!": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::events:putEvents.waitForTaskToken",
+            "Arguments": {
+                "Entries": [
+                    {
+                        "Detail": {
+                            "Message": "Hello from Step Functions!",
+                            "TaskToken": "{% $states.context.Task.Token %}"
+                        },
+                        "DetailType": "MyDetailType",
+                        "EventBusName": "MyEventBusName",
+                        "Source": "MySource"
+                    }
+                ]
+            },
             "End": true
         }
     },
